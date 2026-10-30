@@ -1,0 +1,29 @@
+{
+  "name": "love-wins-uganda",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Love Wins Uganda website: frontend, API, database and admin dashboard",
+  "main": "server.js",
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "create-admin": "node scripts/create-admin.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.11.1",
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
