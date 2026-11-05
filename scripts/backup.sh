@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SQLite backup wrapper. See DEPLOY.md for cron and retention instructions.
+# MongoDB backup wrapper. See DEPLOY.md for cron and retention instructions.
 set -euo pipefail
 APP="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP"

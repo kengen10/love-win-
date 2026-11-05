@@ -1,12 +1,29 @@
 # Publishing Love Wins live
 
+The data lives in MongoDB (Atlas or your own mongod). Set `MONGODB_URI` and `MONGODB_DB`
+everywhere the app runs.
+
+## 0. Deploy on Vercel
+1. Push the project to GitHub and import it at vercel.com/new (Vercel detects Express
+   automatically, so no build settings are needed).
+2. Project Settings > Environment Variables: add `MONGODB_URI`, `MONGODB_DB`, `JWT_SECRET`
+   (32+ random characters), `SITE_URL` (your https URL) and, once you take payments,
+   `FLW_SECRET_KEY` and `FLW_WEBHOOK_HASH`. Vercel sets `NODE_ENV=production` for you.
+3. In Atlas, Network Access: allow `0.0.0.0/0` (Vercel's functions have no fixed IP).
+4. Create the first admin from your machine against that same cluster:
+   `npm run create-admin -- admin "your-long-password"`
+5. Deploy. Files in `public/` are served from Vercel's CDN, everything else hits the
+   Express function.
+6. Do not rely on SQLite: Vercel's filesystem is read-only apart from `/tmp`, which is
+   wiped between requests.
+
 ## 1. Domain
 Register a domain (e.g. lovewins.org) with any registrar. You will point its DNS A record to your server in step 4.
 
 ## 2. Server (about USD 5-6/month)
 Create an Ubuntu 24.04 server (DigitalOcean, Hetzner, Linode, Vultr), then:
 
-    sudo apt update && sudo apt install -y nginx sqlite3 ufw git curl build-essential
+    sudo apt update && sudo apt install -y nginx ufw git curl build-essential
     curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
     sudo npm i -g pm2
     sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable
@@ -16,7 +33,7 @@ Create an Ubuntu 24.04 server (DigitalOcean, Hetzner, Linode, Vultr), then:
     # copy the project there (scp -r / rsync / git), then:
     cd /var/www/love-wins && npm install --omit=dev
     npm run setup
-    nano .env      # set NODE_ENV=production and SITE_URL=https://yourdomain.org
+    nano .env      # set NODE_ENV=production, SITE_URL=https://yourdomain.org and MONGODB_URI
     chmod 600 .env  # setup already generated a random JWT_SECRET
     npm run create-admin -- admin "your-long-password"
     pm2 start deploy/ecosystem.config.js && pm2 save && pm2 startup
@@ -46,18 +63,17 @@ Add this line, using the absolute Node path returned by `command -v node` if nee
     0 2 * * * cd /var/www/love-wins && /usr/bin/node scripts/backup.js >> /var/www/love-wins/backup.log 2>&1
 
 Alternatively run `bash scripts/backup.sh` from the project directory.
-Backups respect `DB_PATH` and `BACKUP_DIR` from `.env`. The source database must
-already exist. Copy /var/www/love-wins/backups off the server regularly using
+Backups export every collection to a timestamped JSON file and respect
+`BACKUP_DIR` from `.env`. Copy /var/www/love-wins/backups off the server regularly using
 your private backup destination. Review and remove old backups after confirming
 an off-server copy; backups are not deleted automatically.
 
-Restore: stop the app with `pm2 stop love-wins`, move the existing database and
-its `-wal`/`-shm` files to a safe directory, then run:
+Restore: stop the app with `pm2 stop love-wins`, then run:
 
-    npm run restore -- backups/<backup-file>.db
+    npm run restore -- backups/lovewins-<timestamp>.json --force
     pm2 restart love-wins
 
-Restore verifies SQLite integrity and refuses to overwrite an existing database.
+Restore refuses to overwrite collections that already hold data unless `--force` is passed.
 Keep a separate secure copy of `.env`; database backups do not include settings.
 Update: upload files, `npm install --omit=dev`, `pm2 restart love-wins`.
 
