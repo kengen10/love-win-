@@ -38,6 +38,11 @@ r.get('/reports', ah(async (_req, res) => {
 }));
 
 // ---- Donations ----
+r.get('/payment-methods', ah(async (_req, res) => {
+  res.json(await db.list('payment_methods', { enabled: 1 },
+    { sort: { id: 1 }, projection: { id: 1, code: 1, label: 1, type: 1, blurb: 1, instructions: 1, details: 1 } }));
+}));
+
 r.post('/donations', formLimit, ah(async (req, res) => {
   const name = clean(req.body.name, 120), email = clean(req.body.email, 254).toLowerCase();
   const amount = Math.round(Number(req.body.amount));
@@ -47,9 +52,20 @@ r.post('/donations', formLimit, ah(async (req, res) => {
   if (!Number.isFinite(amount) || amount < 1000 || amount > 50000000)
     return res.status(400).json({ error: 'Please enter an amount between UGX 1,000 and UGX 50,000,000.' });
 
+  const method = await (await db.get('payment_methods')).findOne(
+    { code: clean(req.body.method, 20).toLowerCase(), enabled: 1 },
+    { projection: { _id: 0, code: 1, label: 1, type: 1, instructions: 1, details: 1 } });
+  if (!method) return res.status(400).json({ error: 'Please choose how you would like to give.' });
+
   const tx_ref = 'LW-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex');
-  const d = { tx_ref, name, email, amount, currency: 'UGX', frequency, region, status: 'pending' };
+  const d = { tx_ref, name, email, amount, currency: 'UGX', frequency, region, method: method.code, status: 'pending' };
   await db.insert('donations', d);
+
+  // Bank transfers are settled outside the payment provider, so we hand the
+  // donor the account details instead of a checkout link.
+  if (method.type === 'bank') {
+    return res.json({ bank: true, message: method.instructions, details: method.details });
+  }
 
   if (!pay.enabled()) {
     return res.json({ demo: true, message: 'Payments are not switched on yet, so no money was taken. Your pledge was recorded for follow-up.' });

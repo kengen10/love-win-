@@ -35,7 +35,26 @@ async function ensureIndexes(db) {
     db.collection('stories').createIndex({ id: 1 }, { unique: true }),
     db.collection('reports').createIndex({ id: 1 }, { unique: true }),
     db.collection('admins').createIndexes([{ key: { id: 1 }, unique: true }, { key: { username: 1 }, unique: true }]),
+    db.collection('payment_methods').createIndexes([{ key: { id: 1 }, unique: true }, { key: { code: 1 }, unique: true }]),
   ]);
+  await seedPaymentMethods(db);
+}
+
+// Payment options shown on the donate page. The owner can edit the labels,
+// instructions and bank details (or switch a method off) through the admin API.
+const DEFAULT_PAYMENT_METHODS = [
+  { code: 'airtel', label: 'Airtel Money', type: 'mobile_money', blurb: 'Pay from your Airtel Money wallet.', instructions: 'Approve the payment on your phone with your Airtel Money PIN.', details: '', enabled: 1 },
+  { code: 'mtn', label: 'MTN Mobile Money', type: 'mobile_money', blurb: 'Pay from your MTN Mobile Money (MoMo) wallet.', instructions: 'Approve the payment on your phone with your MTN MoMo PIN.', details: '', enabled: 1 },
+  { code: 'card', label: 'Card or in-app payment', type: 'card', blurb: 'Visa, Mastercard and other cards.', instructions: 'Enter your card details on the secure payment page.', details: '', enabled: 1 },
+  { code: 'bank', label: 'Bank transfer', type: 'bank', blurb: 'Pay directly into the organisation account.', instructions: 'Transfer to the account below, then send us the receipt so we can confirm your gift.', details: 'Bank: [bank name]\nAccount name: Rukundo Nesinga Initiative\nAccount number: [account number]\nBranch: [branch]\nSWIFT/BIC: [swift code]', enabled: 1 },
+];
+
+async function seedPaymentMethods(db) {
+  const col = db.collection('payment_methods');
+  if (await col.countDocuments({}, { limit: 1 })) return;
+  const docs = DEFAULT_PAYMENT_METHODS.map((m, i) => ({ ...m, id: i + 1, created_at: now() }));
+  await col.insertMany(docs);
+  await db.collection('counters').updateOne({ _id: 'payment_methods' }, { $set: { seq: docs.length } }, { upsert: true });
 }
 
 // Documents keep a numeric "id" so the admin dashboard and CSV exports behave

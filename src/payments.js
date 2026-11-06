@@ -12,6 +12,10 @@ async function flw(path, opts = {}) {
   return j;
 }
 
+// Flutterwave's hosted page groups Ugandan mobile money under one option; the
+// donor's chosen method decides what the checkout offers first.
+const OPTIONS = { airtel: 'mobilemoneyuganda', mtn: 'mobilemoneyuganda', card: 'card' };
+
 async function createPayment(d, siteUrl) {
   const j = await flw('/payments', {
     method: 'POST',
@@ -20,9 +24,9 @@ async function createPayment(d, siteUrl) {
       amount: d.amount,
       currency: d.currency,
       redirect_url: `${siteUrl}/api/donations/callback`,
-      payment_options: d.region === 'uganda' ? 'mobilemoneyuganda,card' : 'card',
+      payment_options: OPTIONS[d.method] || (d.region === 'uganda' ? 'mobilemoneyuganda,card' : 'card'),
       customer: { email: d.email, name: d.name },
-      customizations: { title: 'Love Wins Uganda', description: 'Donation' },
+      customizations: { title: 'Rukundo Nesinga Initiative', description: 'Donation' },
     }),
   });
   return j.data.link;

@@ -16,7 +16,36 @@ function status(el, msg) { el.style.display = 'block'; el.textContent = msg; }
 function busy(form, on) { const b = form.querySelector('button[type=submit]'); if (b) b.disabled = on; }
 
 // Donation form
-let selectedAmount = '25000', frequency = 'once';
+let selectedAmount = '25000', frequency = 'once', method = '';
+
+function showBank(m, on) {
+  const box = $('#bankDetails');
+  if (!box) return;
+  box.hidden = !on;
+  if (on) { $('#bankInstructions').textContent = m.instructions || ''; $('#bankAccount').textContent = m.details || ''; }
+}
+
+const methodPicker = $('#methodPicker');
+if (methodPicker) fetch('/api/payment-methods').then(r => r.json()).then(items => {
+  methodPicker.textContent = '';
+  items.forEach(m => {
+    const b = mk('button', 'method');
+    b.type = 'button'; b.dataset.method = m.code;
+    b.append(mk('strong', '', m.label), mk('small', '', m.blurb || ''));
+    b.addEventListener('click', () => {
+      method = m.code;
+      methodPicker.querySelectorAll('.method').forEach(x => x.classList.toggle('active', x === b));
+      showBank(m, m.type === 'bank');
+    });
+    methodPicker.append(b);
+  });
+  if (items.length) { methodPicker.querySelector('.method').classList.add('active'); method = items[0].code; }
+  else methodPicker.append(mk('p', 'form-note', 'No payment methods are available yet. Please contact us.'));
+}).catch(() => {
+  methodPicker.textContent = '';
+  methodPicker.append(mk('p', 'form-note', 'Payment options could not be loaded. Please refresh the page.'));
+});
+
 document.querySelectorAll('[data-frequency]').forEach(b => b.addEventListener('click', () => {
   frequency = b.dataset.frequency;
   document.querySelectorAll('[data-frequency]').forEach(x => x.classList.toggle('active', x === b));
@@ -32,10 +61,12 @@ if (donationForm) donationForm.addEventListener('submit', async e => {
   const st = $('#donateStatus');
   const amount = selectedAmount === 'custom' ? Number($('#customAmount').value) : Number(selectedAmount);
   if (!Number.isFinite(amount) || amount < 1000) return status(st, 'Please choose or enter a donation of at least UGX 1,000.');
+  if (!method) return status(st, 'Please choose how you would like to give.');
   busy(donationForm, true);
   try {
-    const j = await post('/api/donations', { name: $('#donorName').value, email: $('#donorEmail').value, region: $('#region').value, amount, frequency });
+    const j = await post('/api/donations', { name: $('#donorName').value, email: $('#donorEmail').value, region: $('#region').value, amount, frequency, method });
     if (j.url) { status(st, 'Taking you to our secure payment page…'); window.location.href = j.url; return; }
+    if (j.bank) { const box = $('#bankDetails'); if (box) { box.hidden = false; box.scrollIntoView({ block: 'center' }); } }
     status(st, j.message);
   } catch (err) { status(st, err.message); }
   busy(donationForm, false);

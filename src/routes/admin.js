@@ -80,6 +80,18 @@ crud('stories', { title: 200, tag: 40, summary: 1000, image_url: 500 }, (s) =>
 crud('reports', { title: 200, year: 10, url: 500 }, (s) =>
   !s.title || !httpUrl(s.url) ? 'Title and a valid link (http/https) are required.' : null);
 
+// Payment methods: labels, instructions and bank details the owner can edit.
+r.get('/payment-methods', ah(async (_req, res) => res.json(await db.list('payment_methods', {}, { sort: { id: 1 } }))));
+r.patch('/payment-methods/:id', ah(async (req, res) => {
+  const set = {};
+  for (const k of ['label', 'blurb', 'instructions']) if (req.body[k] != null) set[k] = clean(req.body[k], 500);
+  if (req.body.details != null) set.details = clean(req.body.details, 2000);
+  if (req.body.enabled != null) set.enabled = req.body.enabled ? 1 : 0;
+  if (!Object.keys(set).length) return res.status(400).json({ error: 'Nothing to update.' });
+  await (await db.get('payment_methods')).updateOne({ id: Number(req.params.id) }, { $set: set });
+  res.json({ ok: true });
+}));
+
 // CSV exports
 const csvCell = (v) => { let s = String(v ?? ''); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
 function csv(res, name, rows) {
