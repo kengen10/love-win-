@@ -29,7 +29,8 @@ async function connect() {
 
 async function ensureIndexes(db) {
   await Promise.all([
-    db.collection('donations').createIndexes([{ key: { id: 1 }, unique: true }, { key: { tx_ref: 1 }, unique: true }, { key: { status: 1 } }]),
+    // "reference" is the id we send to Pesapal as the merchant reference.
+    db.collection('donations').createIndexes([{ key: { id: 1 }, unique: true }, { key: { reference: 1 }, unique: true }, { key: { status: 1 } }]),
     db.collection('messages').createIndex({ id: 1 }, { unique: true }),
     db.collection('subscribers').createIndexes([{ key: { id: 1 }, unique: true }, { key: { email: 1 }, unique: true }]),
     db.collection('stories').createIndex({ id: 1 }, { unique: true }),
@@ -40,20 +41,20 @@ async function ensureIndexes(db) {
   await seedPaymentMethods(db);
 }
 
-// Payment options shown on the donate page. The owner can edit the labels,
-// instructions and bank details (or switch a method off) through the admin API.
 const DEFAULT_PAYMENT_METHODS = [
-  { code: 'airtel', label: 'Airtel Money', type: 'mobile_money', blurb: 'Pay from your Airtel Money wallet.', instructions: 'Approve the payment on your phone with your Airtel Money PIN.', details: '', enabled: 1 },
-  { code: 'mtn', label: 'MTN Mobile Money', type: 'mobile_money', blurb: 'Pay from your MTN Mobile Money (MoMo) wallet.', instructions: 'Approve the payment on your phone with your MTN MoMo PIN.', details: '', enabled: 1 },
-  { code: 'card', label: 'Card or in-app payment', type: 'card', blurb: 'Visa, Mastercard and other cards.', instructions: 'Enter your card details on the secure payment page.', details: '', enabled: 1 },
-  { code: 'bank', label: 'Bank transfer', type: 'bank', blurb: 'Pay directly into the organisation account.', instructions: 'Transfer to the account below, then send us the receipt so we can confirm your gift.', details: 'Bank: [bank name]\nAccount name: Rukundo Nesinga Initiative\nAccount number: [account number]\nBranch: [branch]\nSWIFT/BIC: [swift code]', enabled: 1 },
+  { code: 'mtn', label: 'MTN Mobile Money', type: 'mobile_money', blurb: 'Give directly from your MTN Mobile Money wallet.', instructions: 'Send your donation to the MTN Mobile Money number above, then contact the RNI team with your transaction reference.' },
+  { code: 'airtel', label: 'Airtel Money', type: 'mobile_money', blurb: 'Give directly from your Airtel Money wallet.', instructions: 'Send your donation to the Airtel Money number above, then contact the RNI team with your transaction reference.' },
+  { code: 'bank', label: 'Bank transfer', type: 'bank', blurb: 'Give directly into the organisation’s bank account.', instructions: 'Transfer to the bank account above, then contact the RNI team with your payment reference.' },
 ];
 
 async function seedPaymentMethods(db) {
-  const col = db.collection('payment_methods');
-  if (await col.countDocuments({}, { limit: 1 })) return;
-  const docs = DEFAULT_PAYMENT_METHODS.map((m, i) => ({ ...m, id: i + 1, created_at: now() }));
-  await col.insertMany(docs);
+  const methods = db.collection('payment_methods');
+  if (await methods.countDocuments({}, { limit: 1 })) return;
+  const docs = DEFAULT_PAYMENT_METHODS.map((method, i) => ({
+    ...method, account_name: '', account_number: '', details: '', enabled: 0,
+    id: i + 1, created_at: now(),
+  }));
+  await methods.insertMany(docs);
   await db.collection('counters').updateOne({ _id: 'payment_methods' }, { $set: { seq: docs.length } }, { upsert: true });
 }
 

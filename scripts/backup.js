@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../src/db');
 
-const COLLECTIONS = ['admins', 'donations', 'messages', 'reports', 'stories', 'subscribers', 'counters'];
+const COLLECTIONS = ['admins', 'donations', 'messages', 'payment_methods', 'reports', 'stories', 'subscribers', 'counters'];
 
 async function main() {
   const mongo = await db.connect();

@@ -15,41 +15,9 @@ async function post(url, data) {
 function status(el, msg) { el.style.display = 'block'; el.textContent = msg; }
 function busy(form, on) { const b = form.querySelector('button[type=submit]'); if (b) b.disabled = on; }
 
-// Donation form
-let selectedAmount = '25000', frequency = 'once', method = '';
-
-function showBank(m, on) {
-  const box = $('#bankDetails');
-  if (!box) return;
-  box.hidden = !on;
-  if (on) { $('#bankInstructions').textContent = m.instructions || ''; $('#bankAccount').textContent = m.details || ''; }
-}
-
-const methodPicker = $('#methodPicker');
-if (methodPicker) fetch('/api/payment-methods').then(r => r.json()).then(items => {
-  methodPicker.textContent = '';
-  items.forEach(m => {
-    const b = mk('button', 'method');
-    b.type = 'button'; b.dataset.method = m.code;
-    b.append(mk('strong', '', m.label), mk('small', '', m.blurb || ''));
-    b.addEventListener('click', () => {
-      method = m.code;
-      methodPicker.querySelectorAll('.method').forEach(x => x.classList.toggle('active', x === b));
-      showBank(m, m.type === 'bank');
-    });
-    methodPicker.append(b);
-  });
-  if (items.length) { methodPicker.querySelector('.method').classList.add('active'); method = items[0].code; }
-  else methodPicker.append(mk('p', 'form-note', 'No payment methods are available yet. Please contact us.'));
-}).catch(() => {
-  methodPicker.textContent = '';
-  methodPicker.append(mk('p', 'form-note', 'Payment options could not be loaded. Please refresh the page.'));
-});
-
-document.querySelectorAll('[data-frequency]').forEach(b => b.addEventListener('click', () => {
-  frequency = b.dataset.frequency;
-  document.querySelectorAll('[data-frequency]').forEach(x => x.classList.toggle('active', x === b));
-}));
+// Donation form: we only collect name, email and amount. The donor chooses
+// MTN, Airtel, card or bank and enters those details on Pesapal's own page.
+let selectedAmount = '25000';
 document.querySelectorAll('[data-amount]').forEach(b => b.addEventListener('click', () => {
   selectedAmount = b.dataset.amount;
   document.querySelectorAll('[data-amount]').forEach(x => x.classList.toggle('active', x === b));
@@ -60,14 +28,14 @@ if (donationForm) donationForm.addEventListener('submit', async e => {
   e.preventDefault();
   const st = $('#donateStatus');
   const amount = selectedAmount === 'custom' ? Number($('#customAmount').value) : Number(selectedAmount);
-  if (!Number.isFinite(amount) || amount < 1000) return status(st, 'Please choose or enter a donation of at least UGX 1,000.');
-  if (!method) return status(st, 'Please choose how you would like to give.');
+  if (!Number.isInteger(amount) || amount < 1000) return status(st, 'Please choose or enter a whole-number donation of at least UGX 1,000.');
   busy(donationForm, true);
+  status(st, 'Preparing your secure payment page…');
   try {
-    const j = await post('/api/donations', { name: $('#donorName').value, email: $('#donorEmail').value, region: $('#region').value, amount, frequency, method });
-    if (j.url) { status(st, 'Taking you to our secure payment page…'); window.location.href = j.url; return; }
-    if (j.bank) { const box = $('#bankDetails'); if (box) { box.hidden = false; box.scrollIntoView({ block: 'center' }); } }
-    status(st, j.message);
+    const j = await post('/api/donate', { name: $('#donorName').value, email: $('#donorEmail').value, amount });
+    if (!j.redirectUrl) throw new Error('We could not start the payment. Please try again shortly.');
+    window.location.href = j.redirectUrl;
+    return;
   } catch (err) { status(st, err.message); }
   busy(donationForm, false);
 });
@@ -96,6 +64,24 @@ if (news) news.addEventListener('submit', async e => {
 
 // Stories + reports from the database
 function mk(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+const directPayments = $('#directPayments');
+if (directPayments) fetch('/api/payment-methods').then(r => r.json()).then(items => {
+  if (!Array.isArray(items) || !items.length) return;
+  const list = $('#directPaymentMethods');
+  items.forEach(m => {
+    const card = mk('article', 'payment-account');
+    card.append(mk('h4', '', m.label));
+    if (m.blurb) card.append(mk('p', '', m.blurb));
+    const account = mk('dl');
+    account.append(mk('dt', '', m.type === 'bank' ? 'Account name' : 'Registered name'), mk('dd', '', m.account_name));
+    account.append(mk('dt', '', m.type === 'bank' ? 'Account number' : 'Mobile money number'), mk('dd', '', m.account_number));
+    card.append(account);
+    if (m.details) card.append(mk('pre', '', m.details));
+    if (m.instructions) card.append(mk('p', '', m.instructions));
+    list.append(card);
+  });
+  directPayments.hidden = false;
+}).catch(() => {});
 const storyList = $('#storyList');
 if (storyList) fetch('/api/stories').then(r => r.json()).then(items => {
   storyList.textContent = '';
@@ -119,15 +105,27 @@ if (reportList) fetch('/api/reports').then(r => r.json()).then(items => {
   });
 }).catch(() => {});
 
-// Thank-you page
-const tt = $('#thanksTitle');
-if (tt) {
-  const s = new URLSearchParams(location.search).get('status');
-  const m = {
-    paid: ['Thank you for your gift!', 'Your donation was received. A receipt will be sent to your email address. You are helping children in Uganda learn and thrive.'],
-    pending: ['We are confirming your payment', 'Your payment has not been confirmed yet. If you completed it, there is no need to pay again; we will confirm shortly.'],
-    cancelled: ['Payment cancelled', 'No money was taken. You are welcome to try again whenever you are ready.'],
-    failed: ['Payment did not go through', 'No money was taken. Please try again or contact us if you need help.']
-  }[s] || ['Thank you', 'Thanks for visiting Love Wins.'];
-  tt.textContent = m[0]; $('#thanksText').textContent = m[1];
+// Thank-you page: Pesapal sends the donor back with ?OrderMerchantReference=…
+// We poll our own status endpoint, which re-checks the real status with Pesapal.
+const tyTitle = $('#tyTitle');
+if (tyTitle) {
+  const tyMsg = $('#tyMsg'), tyStatus = $('#tyStatus');
+  const ref = new URLSearchParams(location.search).get('OrderMerchantReference');
+  let tries = 0;
+  const show = (title, msg, note) => { tyTitle.textContent = title; tyMsg.textContent = msg; tyStatus.textContent = note; };
+  const check = async () => {
+    try {
+      const r = await fetch('/api/donation-status?ref=' + encodeURIComponent(ref));
+      const d = await r.json().catch(() => ({}));
+      if (d.status === 'successful') return show('Thank you for your gift!', 'Your donation of ' + d.currency + ' ' + Number(d.amount).toLocaleString() + ' was received. You are helping children learn and grow.', 'Payment confirmed.');
+      if (d.status === 'failed' || d.status === 'reversed') return show('Payment not completed', 'Your payment did not go through, and you have not been charged for a completed gift. You are welcome to try again.', 'Payment status: ' + d.status + '.');
+      retry();
+    } catch { retry(); }
+  };
+  const retry = () => {
+    if (++tries < 8) setTimeout(check, 3000);
+    else show('We are still confirming your payment', 'Mobile money payments can take a few minutes. If you approved the payment, it will be recorded once confirmed.', 'Still pending.');
+  };
+  if (!ref) show('Thank you', 'If you completed a payment, we will confirm it shortly.', 'We could not look up this payment.');
+  else check();
 }

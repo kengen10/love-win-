@@ -35,10 +35,10 @@ r.get('/summary', ah(async (_req, res) => {
   const [donations, messages, subscribers] = await Promise.all([
     db.get('donations'), db.get('messages'), db.get('subscribers')]);
   const [totals] = await donations.aggregate([
-    { $group: { _id: null, paidTotal: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } } } },
+    { $group: { _id: null, paidTotal: { $sum: { $cond: [{ $eq: ['$status', 'successful'] }, '$amount', 0] } } } },
   ]).toArray();
   const [paidCount, pendingCount, newMessages, subCount] = await Promise.all([
-    donations.countDocuments({ status: 'paid' }),
+    donations.countDocuments({ status: 'successful' }),
     donations.countDocuments({ status: 'pending' }),
     messages.countDocuments({ handled: 0 }),
     subscribers.countDocuments({}),
@@ -80,15 +80,31 @@ crud('stories', { title: 200, tag: 40, summary: 1000, image_url: 500 }, (s) =>
 crud('reports', { title: 200, year: 10, url: 500 }, (s) =>
   !s.title || !httpUrl(s.url) ? 'Title and a valid link (http/https) are required.' : null);
 
-// Payment methods: labels, instructions and bank details the owner can edit.
-r.get('/payment-methods', ah(async (_req, res) => res.json(await db.list('payment_methods', {}, { sort: { id: 1 } }))));
+r.get('/payment-methods', ah(async (_req, res) => res.json(await db.list('payment_methods', { code: { $in: ['mtn', 'airtel', 'bank'] } }, { sort: { id: 1 } }))));
 r.patch('/payment-methods/:id', ah(async (req, res) => {
+  const methods = await db.get('payment_methods');
+  const id = Number(req.params.id);
+  const current = await methods.findOne({ id });
+  if (!current) return res.status(404).json({ error: 'Payment method not found.' });
+
   const set = {};
-  for (const k of ['label', 'blurb', 'instructions']) if (req.body[k] != null) set[k] = clean(req.body[k], 500);
-  if (req.body.details != null) set.details = clean(req.body.details, 2000);
-  if (req.body.enabled != null) set.enabled = req.body.enabled ? 1 : 0;
+  const fields = { label: 100, blurb: 300, instructions: 1000, details: 2000, account_name: 160, account_number: 160 };
+  for (const [key, max] of Object.entries(fields)) {
+    if (req.body[key] != null) set[key] = clean(req.body[key], max);
+  }
+  if (req.body.enabled != null) {
+    if (typeof req.body.enabled !== 'boolean') return res.status(400).json({ error: 'Enabled must be true or false.' });
+    set.enabled = req.body.enabled ? 1 : 0;
+  }
   if (!Object.keys(set).length) return res.status(400).json({ error: 'Nothing to update.' });
-  await (await db.get('payment_methods')).updateOne({ id: Number(req.params.id) }, { $set: set });
+
+  const updated = { ...current, ...set };
+  if (!updated.label) return res.status(400).json({ error: 'Payment method name is required.' });
+  if (updated.enabled && (!updated.account_name || !updated.account_number))
+    return res.status(400).json({ error: 'Enter the account name and account or mobile money number before enabling this method.' });
+
+  set.updated_at = db.now();
+  await methods.updateOne({ id }, { $set: set });
   res.json({ ok: true });
 }));
 

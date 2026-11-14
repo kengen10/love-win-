@@ -8,7 +8,7 @@ async function api(p, o = {}) {
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error'); return j;
 }
 const money = n => 'UGX ' + Number(n).toLocaleString();
-const TABS = { overview: 'Overview', donations: 'Donations', messages: 'Messages', subscribers: 'Subscribers', stories: 'Stories', reports: 'Reports', payments: 'Payments' };
+const TABS = { overview: 'Overview', donations: 'Donations', messages: 'Messages', subscribers: 'Subscribers', stories: 'Stories', reports: 'Reports', payments: 'Payment accounts' };
 let tab = 'overview';
 
 function showLogin() { $('#app').hidden = true; $('#login').hidden = false; }
@@ -35,7 +35,7 @@ async function render() {
     } else if (tab === 'donations') {
       const d = await api('/donations');
       v.append(el('div', { class: 'row' }, el('a', { href: '/api/admin/export/donations.csv' }, 'Download CSV')),
-        table([['Date', r => r.created_at], ['Donor', r => r.name], ['Email', r => r.email], ['Amount', r => money(r.amount)], ['Type', r => r.frequency], ['Method', r => r.method || '—'], ['From', r => r.region], ['Status', r => badge(r.status)]], d));
+        table([['Date', r => r.created_at], ['Donor', r => r.name], ['Email', r => r.email], ['Amount', r => money(r.amount)], ['Method', r => r.payment_method || '—'], ['Status', r => badge(r.status)]], d));
     } else if (tab === 'messages') {
       const d = await api('/messages');
       v.append(table([['Date', r => r.created_at], ['From', r => r.name + ' <' + r.email + '>'], ['Topic', r => r.topic], ['Message', r => r.message],
@@ -51,30 +51,38 @@ async function render() {
 
 async function paymentMethods(v) {
   const methods = await api('/payment-methods');
-  v.append(el('p', { class: 'msg' }, 'These are the ways donors can give. Edit the wording and the bank details, or switch a method off to hide it from the donate page.'));
+  v.append(el('p', { class: 'hint' }, 'Add the receiving details for direct MTN Mobile Money, Airtel Money and bank transfers. A method appears on the donate page only when it is enabled and both account fields are filled. Online Pesapal donations continue to work separately.'));
   methods.forEach(m => {
-    const msg = el('p', { class: 'msg' });
+    const msg = el('p', { class: 'msg', role: 'status' });
     const label = el('input', { value: m.label });
     const blurb = el('input', { value: m.blurb });
-    const instructions = el('input', { value: m.instructions });
+    const accountName = el('input', { value: m.account_name });
+    const accountNumber = el('input', { value: m.account_number });
+    const instructions = el('textarea', { rows: 3 }); instructions.value = m.instructions || '';
     const details = el('textarea', { rows: 4 }); details.value = m.details || '';
     const on = el('input', { type: 'checkbox', style: 'width:auto' }); on.checked = !!m.enabled;
-    const kids = [
-      el('h2', {}, m.label),
-      el('label', {}, 'Name', label),
-      el('label', {}, 'Short description', blurb),
-      el('label', {}, 'What the donor should do', instructions),
-      m.type === 'bank' ? el('label', {}, 'Bank / account details (one per line)', details) : null,
-      el('label', { class: 'row' }, on, 'Show on the donate page'),
-      el('button', { type: 'submit' }, 'Save'), msg,
-    ].filter(Boolean);
+    const isBank = m.type === 'bank';
     v.append(el('form', { class: 'panel', onsubmit: async e => {
-      e.preventDefault();
+      e.preventDefault(); msg.textContent = '';
       try {
-        await api('/payment-methods/' + m.id, { method: 'PATCH', body: { label: label.value, blurb: blurb.value, instructions: instructions.value, details: details.value, enabled: on.checked } });
-        msg.textContent = 'Saved.'; render();
+        await api('/payment-methods/' + m.id, { method: 'PATCH', body: {
+          label: label.value, blurb: blurb.value, account_name: accountName.value,
+          account_number: accountNumber.value, instructions: instructions.value,
+          details: details.value, enabled: on.checked,
+        } });
+        render();
       } catch (err) { msg.textContent = err.message; }
-    } }, kids));
+    } },
+      el('h2', {}, m.label),
+      el('div', { class: 'grid2' },
+        el('label', {}, 'Name', label),
+        el('label', {}, 'Short description', blurb),
+        el('label', {}, isBank ? 'Bank account name' : 'Registered mobile money name', accountName),
+        el('label', {}, isBank ? 'Bank account number' : 'Mobile money number', accountNumber),
+        el('label', {}, isBank ? 'Bank name, branch and SWIFT/BIC (one per line)' : 'Additional details (optional)', details),
+        el('label', {}, 'Instructions for the donor', instructions)),
+      el('label', { class: 'row' }, on, 'Show as a direct payment option on the donate page'),
+      el('button', { type: 'submit' }, 'Save payment method'), msg));
   });
 }
 
