@@ -13,6 +13,7 @@
     "restore": "node scripts/restore.js",
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "format": "prettier --write \"public/**/*.{html,css,js}\" \"src/**/*.js\" \"scripts/**/*.js\" \"server.js\" \"deploy/*.js\"",
     "create-admin": "node scripts/create-admin.js"
   },
   "dependencies": {
@@ -25,5 +26,8 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.10.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.10.1"
   }
 }

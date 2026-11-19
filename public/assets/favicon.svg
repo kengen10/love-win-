@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Love Wins — Rukundo Nesinga Initiative">
+  <title>Love Wins — Rukundo Nesinga Initiative</title>
+  <defs>
+    <g id="f-child">
+      <circle cx="0" cy="0" r="2.75" fill="#FFFFFF"/>
+      <path d="M-3.2 7.04c0-2.11 1.47-3.58 3.2-3.58s3.2 1.47 3.2 3.58z" fill="#FFFFFF"/>
+    </g>
+  </defs>
+  <circle cx="32" cy="32" r="32" fill="#10244A"/>
+  <circle cx="32" cy="32" r="27.84" fill="none" stroke="#FFB703" stroke-width="1.2" opacity="0.6"/>
+  <g>
+    <use href="#f-child" x="14.72" y="42.24"/>
+    <use href="#f-child" x="17.02" y="33.6"/>
+    <use href="#f-child" x="23.36" y="27.26"/>
+    <use href="#f-child" x="32" y="24.96"/>
+    <use href="#f-child" x="40.64" y="27.26"/>
+    <use href="#f-child" x="46.98" y="33.6"/>
+    <use href="#f-child" x="49.28" y="42.24"/>
+  </g>
+  <path transform="translate(24.32 25.6) scale(0.64)" d="M12 21s-8-5.5-8-12a5 5 0 0 1 8-4 5 5 0 0 1 8 4c0 6.5-8 12-8 12z" fill="#FF6B4A"/>
+  <path d="M32 48.32c-3.97-2.5-8.58-3.39-12.61-3.39V51.2c4.1 0 8.7 0.9 12.61 3.39 3.9-2.5 8.51-3.39 12.61-3.39v-6.27c-4.03 0-8.64 0.9-12.61 3.39z" fill="#FFB703"/>
+  <path d="M32 48.32v6.27" stroke="#10244A" stroke-width="1.6" fill="none"/>
+</svg>
